@@ -2,6 +2,12 @@
   "name": "openspec-viz",
   "version": "0.1.0",
   "description": "本地可视化工具:基于 OpenSpec 目录结构,展示 13 节点工作流",
+  "license": "MIT",
+  "author": "darkyang",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/darkyang/openspec_viz.git"
+  },
   "type": "module",
   "bin": {
     "openspec-viz": "./bin/cli.js"

@@ -1,0 +1,12 @@
+node_modules
+dist
+*.log
+.DS_Store
+.vscode
+.idea
+coverage
+.cache
+*.tsbuildinfo
+
+# 本地方案文档,不入仓库
+openspec-viz-plan.md

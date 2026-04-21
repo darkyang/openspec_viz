@@ -7,24 +7,39 @@ export interface LiveChangeEvent {
   filePath?: string
 }
 
-type Handler = (event: LiveChangeEvent) => void
+export interface LiveAiSessionEvent {
+  type: 'ai-session-updated'
+  sessionId: string
+  filePath: string
+  kind: 'add' | 'change' | 'unlink'
+}
 
-export function useLiveEvents(handler: Handler) {
+export type LiveEvent = LiveChangeEvent | LiveAiSessionEvent
+
+type EventTypeMap = {
+  'change-updated': LiveChangeEvent
+  'ai-session-updated': LiveAiSessionEvent
+}
+
+export function useLiveEvents<T extends keyof EventTypeMap = 'change-updated'>(
+  handler: (event: EventTypeMap[T]) => void,
+  eventType: T = 'change-updated' as T
+) {
   useEffect(() => {
     const es = new EventSource('/sse')
-    const onChange = (ev: MessageEvent) => {
+    const onEvent = (ev: MessageEvent) => {
       try {
-        const data = JSON.parse(ev.data) as LiveChangeEvent
+        const data = JSON.parse(ev.data) as EventTypeMap[T]
         handler(data)
       } catch {
         // ignore
       }
     }
-    es.addEventListener('change-updated', onChange)
+    es.addEventListener(eventType, onEvent)
     return () => {
-      es.removeEventListener('change-updated', onChange)
+      es.removeEventListener(eventType, onEvent)
       es.close()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [eventType])
 }

@@ -35,6 +35,8 @@ export interface ChangeNode {
   workflow: WorkflowNode[]
   files: FileTreeNode
   taskProgress: TaskProgress
+  aiSessions?: ChangeAiSession[]
+  aiStats?: AiStats
 }
 
 export interface ChangeSummary {
@@ -72,4 +74,51 @@ export interface OverviewResponse {
   openspecRoot: string
   changes: ChangeSummary[]
   summary: OverviewSummary
+}
+
+export interface AiSessionTokens {
+  input: number
+  output: number
+  cacheRead: number
+  cacheCreation: number
+}
+
+export interface AiSessionSummary {
+  sessionId: string
+  filePath: string
+  startedAt: string
+  endedAt: string
+  durationMs: number
+  model: string | null
+  userTurns: number
+  assistantTurns: number
+  toolCalls: Record<string, number>
+  tokens: AiSessionTokens
+  errorCount: number
+  touchedFiles: string[]
+  gitBranch?: string
+  slug?: string
+  cwd?: string
+}
+
+export interface ChangeAiAttribution {
+  changeId: string
+  archived: boolean
+  sessionId: string
+  hitCount: number
+  primary: boolean
+}
+
+export interface AiStats {
+  totalSessions: number
+  totalTokens: number
+  totalDurationMs: number
+  totalUserTurns: number
+  totalAssistantTurns: number
+  totalErrorCount: number
+}
+
+export interface ChangeAiSession extends AiSessionSummary {
+  hitCount: number
+  primary: boolean
 }

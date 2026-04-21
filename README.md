@@ -12,6 +12,7 @@
 - **本地离线 Web 面板** —— `openspec-viz` 一行启动,不需要部署、账号、数据库
 - **文件树 + Markdown 渲染** —— 边看 change 目录结构边浏览文档,代码块语法高亮
 - **chokidar + SSE 实时刷新** —— 编辑器里改 md,浏览器面板立即跟随
+- **AI 协作可观测** —— 读取本地 Claude Code session 日志,按 change 归因展示 token 消耗、工具调用、耗时与错误数
 
 ## 快速开始
 
@@ -102,11 +103,23 @@ openspec/changes/<change-name>/
 | 测试验证 | `tasks.md` 全部 `[x]` |
 | 调试 | `implementation/01-debug-log.md` 存在(手动维护) |
 
+## AI 协作可观测
+
+在 Change 详情页右侧切到 **Sessions** 标签，可以看到用 [Claude Code](https://claude.com/claude-code) 改这个 change 时的每次会话：
+
+- **归因**：按 session 里 `tool_use`（Read/Edit/Write/MultiEdit/NotebookEdit/Glob/Grep）命中 `openspec/changes/<id>/` 下文件的次数计数；命中最多的标 `primary`，其余标 `partial`
+- **指标**：持续时间、累计 token（input/output/cacheRead/cacheCreation 四项分别汇总）、user/assistant 轮次、工具调用 top-5、`tool_result.is_error` 错误数、受影响文件列表
+- **实时**：对 `~/.claude/projects/<project-slug>/` 的 JSONL 追加写做监听，浏览器通过 SSE 自动刷新
+
+**数据来源**：`~/.claude/projects/<slug>/<sessionId>.jsonl`，其中 `slug` = 项目根 cwd 把所有非 `[a-zA-Z0-9-]` 字符（`/`、`_`、`.` 等）替换为 `-`。目录不存在（没装或没用过 Claude Code）时，Sessions 标签显示空状态，不报错。
+
+**隐私**：只读、只在本进程内存里聚合；不外发、不落盘、不入库。
+
 ## 开发
 
 ```bash
 pnpm dev          # server (4567) + vite dev server (5173)
-pnpm test         # parser 单测(Vitest,29 个 case)
+pnpm test         # parser 单测(Vitest,39 个 case)
 pnpm typecheck    # tsc --noEmit
 pnpm build        # 产出 dist/web/ + dist/server/
 ```
@@ -123,11 +136,14 @@ pnpm build        # 产出 dist/web/ + dist/server/
 
 **v1(当前)**:只读可视化,三视图(Timeline / Change cards / Change detail),单机离线。
 
+**已实现**:
+- [x] AI 协作可观测(Claude Code session 日志,token 消耗 / 工具调用 / 错误数,按 change 归因)
+
 **v2(规划中)**:
 - [ ] Capability 视图(按 `specs/<capability>/` 聚合)
 - [ ] 全局 Search / 命令面板
 - [ ] `fixes/` 目录约定 + Bug ↔ Spec 双向联结
-- [ ] AI 协作可观测(Claude Code session 日志,token 消耗 / 一次过率)
+- [ ] 全局 Sessions 视图(跨 change 的 session 时间线与总览)
 - [ ] 局域网 / Docker 部署(支持非工程师协作者)
 - [ ] 音频播放器(挂 `recordings/`)
 - [ ] 写操作(checkbox 点击回写、评论追加)

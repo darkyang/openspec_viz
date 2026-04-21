@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 
 export type SseMessage =
   | { type: 'change-updated'; changeId: string | null; archived: boolean; filePath?: string }
+  | { type: 'ai-session-updated'; sessionId: string; filePath: string; kind: 'add' | 'change' | 'unlink' }
   | { type: 'hello'; serverTime: number }
   | { type: 'ping' }
 

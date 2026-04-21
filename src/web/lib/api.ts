@@ -1,8 +1,12 @@
 import type {
+  AiSessionSummary,
+  ChangeAiAttribution,
   ChangeNode,
   OverviewResponse,
   TimelineEvent,
 } from '../../shared/types'
+
+export type AiSessionWithAttrs = AiSessionSummary & { attributions: ChangeAiAttribution[] }
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -21,4 +25,8 @@ export const api = {
       `/api/changes/${encodeURIComponent(id)}/file?path=${encodeURIComponent(filePath)}`
     ),
   timeline: () => get<{ events: TimelineEvent[] }>('/api/timeline'),
+  aiSessions: () =>
+    get<{ projectRoot: string; sessions: AiSessionWithAttrs[] }>('/api/ai-sessions'),
+  aiSession: (id: string) =>
+    get<AiSessionWithAttrs>(`/api/ai-sessions/${encodeURIComponent(id)}`),
 }

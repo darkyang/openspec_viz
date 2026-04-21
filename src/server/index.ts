@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import { createApi } from './api/index.js'
 import { findOpenspecRoot } from './locator.js'
 import { startWatcher } from './watcher.js'
+import { startAiWatcher } from './ai-watcher.js'
 import { SseHub } from './sse.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -50,6 +51,16 @@ startWatcher(openspecRoot, (info) => {
     changeId: info.changeId,
     archived: info.archived,
     filePath: info.filePath,
+  })
+})
+
+// Wire Claude Code session watcher → SSE broadcast（目录不存在时为 no-op）
+startAiWatcher(path.dirname(openspecRoot), (info) => {
+  sse.broadcast({
+    type: 'ai-session-updated',
+    sessionId: info.sessionId,
+    filePath: info.filePath,
+    kind: info.kind,
   })
 })
 

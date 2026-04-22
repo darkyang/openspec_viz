@@ -6,6 +6,8 @@ import { Layout } from './components/Layout'
 import { TimelineRoute } from './routes/Timeline'
 import { ChangeCardsRoute } from './routes/ChangeCards'
 import { ChangeDetailRoute } from './routes/ChangeDetail'
+import { RequirementsRoute } from './routes/Requirements'
+import { RequirementDetailRoute } from './routes/RequirementDetail'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -13,6 +15,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<TimelineRoute />} />
+          <Route path="/requirements" element={<RequirementsRoute />} />
+          <Route path="/requirements/:id" element={<RequirementDetailRoute />} />
           <Route path="/changes" element={<ChangeCardsRoute />} />
           <Route path="/changes/:id" element={<ChangeDetailRoute />} />
           <Route path="*" element={<Navigate to="/" replace />} />

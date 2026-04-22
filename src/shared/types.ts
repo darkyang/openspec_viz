@@ -37,6 +37,7 @@ export interface ChangeNode {
   taskProgress: TaskProgress
   aiSessions?: ChangeAiSession[]
   aiStats?: AiStats
+  requirementId?: string
 }
 
 export interface ChangeSummary {
@@ -46,6 +47,7 @@ export interface ChangeSummary {
   archived: boolean
   workflow: WorkflowNode[]
   taskProgress: TaskProgress
+  requirementId?: string
 }
 
 export type EventKind = 'created' | 'modified' | 'completed' | 'archived'
@@ -121,4 +123,27 @@ export interface AiStats {
 export interface ChangeAiSession extends AiSessionSummary {
   hitCount: number
   primary: boolean
+}
+
+export const UNGROUPED_ID = '__ungrouped__'
+
+export interface RequirementProgress {
+  totalChanges: number
+  byStatus: Record<ChangeStatus, number>
+  totalTasks: number
+  doneTasks: number
+  totalNodes: number
+  doneNodes: number
+  overallStatus: ChangeStatus
+}
+
+export interface RequirementSummary {
+  id: string
+  title: string
+  /** 首段（或首行） markdown，UI 列表页用来作描述 */
+  description?: string
+  /** requirements/<slug>.md 完整 markdown 正文；仅 detail 接口返回 */
+  body?: string
+  changeIds: string[]
+  progress: RequirementProgress
 }

@@ -14,7 +14,17 @@ export function ChangeCard({ change }: { change: ChangeSummary }) {
     >
       <div className="flex items-start gap-2 mb-3">
         <div className="flex-1 min-w-0">
-          <div className="font-mono text-[11px] text-zinc-400 truncate">{change.id}</div>
+          <div className="flex items-center gap-1.5">
+            <div className="font-mono text-[11px] text-zinc-400 truncate">{change.id}</div>
+            {change.requirementId && (
+              <span
+                className="font-mono text-[10px] px-1 py-px rounded bg-indigo-50 text-indigo-700 border border-indigo-100 truncate max-w-[140px]"
+                title={`requirement: ${change.requirementId}`}
+              >
+                #{change.requirementId}
+              </span>
+            )}
+          </div>
           <div className="font-medium text-sm text-zinc-900 truncate">{change.title}</div>
         </div>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${badge.cls} whitespace-nowrap`}>

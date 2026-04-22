@@ -2,9 +2,13 @@ import type {
   AiSessionSummary,
   ChangeAiAttribution,
   ChangeNode,
+  ChangeSummary,
   OverviewResponse,
+  RequirementSummary,
   TimelineEvent,
 } from '../../shared/types'
+
+export type RequirementDetail = RequirementSummary & { changes: ChangeSummary[] }
 
 export type AiSessionWithAttrs = AiSessionSummary & { attributions: ChangeAiAttribution[] }
 
@@ -59,6 +63,10 @@ export const api = {
       `/api/changes/${encodeURIComponent(id)}/tasks`,
       { line, checked }
     ),
+  requirements: () =>
+    get<{ requirements: RequirementSummary[] }>('/api/requirements'),
+  requirement: (id: string) =>
+    get<RequirementDetail>(`/api/requirements/${encodeURIComponent(id)}`),
   postComment: (id: string, text: string) =>
     send<{ ok: true; filePath: string; totalBytes: number; created: boolean }>(
       'POST',

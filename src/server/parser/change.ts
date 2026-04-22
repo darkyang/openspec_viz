@@ -3,12 +3,35 @@ import path from 'node:path'
 import type { ChangeNode, ChangeStatus, ChangeSummary, WorkflowNode } from '../types.js'
 import { detectWorkflow } from './workflow.js'
 import { readFileTree } from './file-tree.js'
+import { parseFrontmatter } from './frontmatter.js'
+
+interface ProposalMeta {
+  title: string | null
+  requirementId: string | null
+}
+
+/** 读 proposal.md：解 frontmatter 得 requirement，再从 body 的 # heading 取 title。 */
+function readProposalMeta(changeRoot: string): ProposalMeta {
+  const p = path.join(changeRoot, 'proposal.md')
+  if (!fs.existsSync(p)) return { title: null, requirementId: null }
+  try {
+    const content = fs.readFileSync(p, 'utf-8')
+    const { meta, body } = parseFrontmatter(content)
+    const titleMatch = /^#\s+(.+)$/m.exec(body)
+    const title = titleMatch ? titleMatch[1].trim() : null
+    const req = typeof meta.requirement === 'string' && meta.requirement.length > 0 ? meta.requirement : null
+    return { title, requirementId: req }
+  } catch {
+    return { title: null, requirementId: null }
+  }
+}
 
 function readTitle(changeRoot: string, fallbackId: string): string {
-  // 优先取 proposal.md 第一行 # 标题;否则取 requirement/01-draft.md;否则用 id
-  for (const candidate of ['proposal.md', 'requirement/01-draft.md']) {
-    const p = path.join(changeRoot, candidate)
-    if (!fs.existsSync(p)) continue
+  const fromProposal = readProposalMeta(changeRoot).title
+  if (fromProposal) return fromProposal
+  // 回退：requirement/01-draft.md 第一个 # 标题
+  const p = path.join(changeRoot, 'requirement/01-draft.md')
+  if (fs.existsSync(p)) {
     try {
       const content = fs.readFileSync(p, 'utf-8')
       const m = /^#\s+(.+)$/m.exec(content)
@@ -47,7 +70,8 @@ export function parseChange(changeRoot: string, opts: { archived?: boolean } = {
   const archived = opts.archived ?? false
   const { nodes, taskProgress } = detectWorkflow(changeRoot)
   const status = inferStatus(nodes, archived)
-  const title = readTitle(changeRoot, id)
+  const proposal = readProposalMeta(changeRoot)
+  const title = proposal.title ?? readTitle(changeRoot, id)
   const files = readFileTree(changeRoot)
   return {
     id,
@@ -57,6 +81,7 @@ export function parseChange(changeRoot: string, opts: { archived?: boolean } = {
     workflow: nodes,
     files,
     taskProgress,
+    requirementId: proposal.requirementId ?? undefined,
   }
 }
 
@@ -100,6 +125,7 @@ function toSummary(c: ChangeNode): ChangeSummary {
     archived: c.archived,
     workflow: c.workflow,
     taskProgress: c.taskProgress,
+    requirementId: c.requirementId,
   }
 }
 

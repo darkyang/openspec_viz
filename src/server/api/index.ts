@@ -7,6 +7,7 @@ import { attributeToChanges } from '../parser/ai-session.js'
 import { listSessionSummaries, findSessionById } from '../parser/ai-cache.js'
 import { toggleTaskLine, LineMismatchError } from '../writer/tasks-writer.js'
 import { appendComment, EmptyCommentError } from '../writer/comments-writer.js'
+import { listRequirements, findRequirement } from '../parser/requirement.js'
 import type { AiStats, ChangeAiSession, ChangeNode } from '../types.js'
 
 function projectRootFor(openspecRoot: string): string {
@@ -105,6 +106,26 @@ export function createApi(getOpenspecRoot: () => string) {
     }
     const content = fs.readFileSync(abs, 'utf-8')
     return c.json({ id, path: filePath, content, size: content.length })
+  })
+
+  api.get('/requirements', (c) => {
+    const root = getOpenspecRoot()
+    const changes = listChanges(root)
+    const requirements = listRequirements(root, changes)
+    return c.json({ requirements })
+  })
+
+  api.get('/requirements/:id', (c) => {
+    const id = c.req.param('id')
+    if (!/^[A-Za-z0-9_-]+$|^__ungrouped__$/.test(id)) {
+      return c.json({ error: 'invalid requirement id' }, 400)
+    }
+    const root = getOpenspecRoot()
+    const changes = listChanges(root)
+    const req = findRequirement(root, changes, id)
+    if (!req) return c.json({ error: 'requirement not found', id }, 404)
+    const memberChanges = changes.filter((c) => req.changeIds.includes(c.id))
+    return c.json({ ...req, changes: memberChanges })
   })
 
   api.get('/timeline', (c) => {

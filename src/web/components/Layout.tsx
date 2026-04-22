@@ -19,6 +19,12 @@ export function Layout() {
               Timeline
             </NavLink>
             <NavLink
+              to="/requirements"
+              className={({ isActive }) => `${navItem} ${isActive ? navItemActive : ''}`}
+            >
+              Requirements
+            </NavLink>
+            <NavLink
               to="/changes"
               className={({ isActive }) => `${navItem} ${isActive ? navItemActive : ''}`}
             >

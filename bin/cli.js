@@ -63,13 +63,16 @@ async function findPort(start) {
 }
 
 function isFree(port) {
+  // 注意：Hono (@hono/node-server) 的 serve() 未指定 host 时会绑到 '::'（IPv6 dual-stack）。
+  // 这里也不指定 host，确保 isFree 的探测语义与最终 serve 的绑定一致——否则当旧进程
+  // 绑 '::' 时，仅探测 '127.0.0.1' 会误判端口空闲，引发子进程启动时 EADDRINUSE。
   return new Promise((resolve) => {
     const srv = createServer()
     srv.once('error', () => resolve(false))
     srv.once('listening', () => {
       srv.close(() => resolve(true))
     })
-    srv.listen(port, '127.0.0.1')
+    srv.listen(port)
   })
 }
 

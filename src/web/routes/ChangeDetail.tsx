@@ -7,6 +7,8 @@ import { WorkflowGraph, statusBadge } from '../components/WorkflowGraph'
 import { FileTree } from '../components/FileTree'
 import { MarkdownView } from '../components/MarkdownView'
 import { SessionPanel } from '../components/SessionPanel'
+import { CommentsPanel } from '../components/CommentsPanel'
+import { ApiError } from '../lib/api'
 import type { FileTreeNode } from '../../shared/types'
 
 const PREFERRED_DEFAULT = ['proposal.md', 'requirement/01-draft.md', 'design.md', 'tasks.md']
@@ -30,7 +32,8 @@ export function ChangeDetailRoute() {
   const { data: change, loading, error, reload } = useFetch(() => api.change(id), [id])
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
-  const [rightTab, setRightTab] = useState<'file' | 'sessions'>('file')
+  const [rightTab, setRightTab] = useState<'file' | 'sessions' | 'comments'>('file')
+  const [toggleError, setToggleError] = useState<string | null>(null)
 
   // SSE: 当前 change 被修改时,刷新
   useLiveEvents((ev) => {
@@ -123,6 +126,9 @@ export function ChangeDetailRoute() {
                     </span>
                   )}
                 </TabButton>
+                <TabButton active={rightTab === 'comments'} onClick={() => setRightTab('comments')}>
+                  Comments
+                </TabButton>
                 {rightTab === 'file' && selectedFile && (
                   <span className="ml-3 text-xs font-mono text-zinc-400 truncate">{selectedFile}</span>
                 )}
@@ -140,7 +146,36 @@ export function ChangeDetailRoute() {
                         <div className="text-red-600 text-sm">error: {fileQuery.error.message}</div>
                       )}
                       {fileQuery.data && (
-                        <MarkdownView content={fileQuery.data.content} filePath={selectedFile} />
+                        <>
+                          {toggleError && (
+                            <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
+                              {toggleError}
+                            </div>
+                          )}
+                          <MarkdownView
+                            content={fileQuery.data.content}
+                            filePath={selectedFile}
+                            onToggleTask={
+                              selectedFile === 'tasks.md'
+                                ? async (line, checked) => {
+                                    setToggleError(null)
+                                    try {
+                                      await api.toggleTask(id, line, checked)
+                                      // 不做乐观更新；等 watcher → SSE → reload 回流
+                                    } catch (e) {
+                                      if (e instanceof ApiError && e.status === 409) {
+                                        setToggleError('文件已变更，请刷新后重试')
+                                      } else {
+                                        setToggleError(
+                                          e instanceof Error ? e.message : '操作失败'
+                                        )
+                                      }
+                                    }
+                                  }
+                                : undefined
+                            }
+                          />
+                        </>
                       )}
                     </>
                   )}
@@ -162,6 +197,8 @@ export function ChangeDetailRoute() {
                   }
                 />
               )}
+
+              {rightTab === 'comments' && <CommentsPanel changeId={id} files={change.files} />}
             </div>
           </div>
         </>

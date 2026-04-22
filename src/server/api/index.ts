@@ -1,9 +1,12 @@
 import { Hono } from 'hono'
 import path from 'node:path'
+import fs from 'node:fs'
 import { listChanges, parseChange, findChangeRoot } from '../parser/change.js'
 import { buildTimeline } from '../parser/timeline.js'
 import { attributeToChanges } from '../parser/ai-session.js'
 import { listSessionSummaries, findSessionById } from '../parser/ai-cache.js'
+import { toggleTaskLine, LineMismatchError } from '../writer/tasks-writer.js'
+import { appendComment, EmptyCommentError } from '../writer/comments-writer.js'
 import type { AiStats, ChangeAiSession, ChangeNode } from '../types.js'
 
 function projectRootFor(openspecRoot: string): string {
@@ -108,6 +111,69 @@ export function createApi(getOpenspecRoot: () => string) {
     const root = getOpenspecRoot()
     const events = buildTimeline(root)
     return c.json({ events })
+  })
+
+  api.patch('/changes/:id/tasks', async (c) => {
+    const id = c.req.param('id')
+    const root = getOpenspecRoot()
+    const changeRoot = findChangeRoot(root, id)
+    if (!changeRoot) return c.json({ error: 'change not found', id }, 404)
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'invalid json body' }, 400)
+    }
+    const line = (body as { line?: unknown }).line
+    const checked = (body as { checked?: unknown }).checked
+    if (typeof line !== 'number' || !Number.isInteger(line) || line < 1) {
+      return c.json({ error: 'line must be a positive integer' }, 400)
+    }
+    if (typeof checked !== 'boolean') {
+      return c.json({ error: 'checked must be boolean' }, 400)
+    }
+    const tasksPath = path.join(changeRoot, 'tasks.md')
+    if (!fs.existsSync(tasksPath)) {
+      return c.json({ error: 'tasks.md not found' }, 404)
+    }
+    try {
+      const r = toggleTaskLine(tasksPath, line, checked)
+      return c.json({ ok: true, line, flag: r.flag, previousFlag: r.previousFlag })
+    } catch (e) {
+      if (e instanceof LineMismatchError) {
+        return c.json({ error: e.message, currentLine: e.currentLine }, 409)
+      }
+      throw e
+    }
+  })
+
+  api.post('/changes/:id/comments', async (c) => {
+    const id = c.req.param('id')
+    const root = getOpenspecRoot()
+    const changeRoot = findChangeRoot(root, id)
+    if (!changeRoot) return c.json({ error: 'change not found', id }, 404)
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'invalid json body' }, 400)
+    }
+    const text = (body as { text?: unknown }).text
+    if (typeof text !== 'string') {
+      return c.json({ error: 'text must be string' }, 400)
+    }
+    try {
+      const r = appendComment(changeRoot, text)
+      return c.json(
+        { ok: true, filePath: path.relative(changeRoot, r.filePath), totalBytes: r.totalBytes, created: r.created },
+        201
+      )
+    } catch (e) {
+      if (e instanceof EmptyCommentError) {
+        return c.json({ error: e.message }, 400)
+      }
+      throw e
+    }
   })
 
   api.get('/ai-sessions', async (c) => {

@@ -25,6 +25,11 @@ const highlighterPromise = createHighlighterCore({
 interface Props {
   content: string
   filePath?: string
+  /**
+   * 若传入，则把 md 里的 task-list checkbox 渲染为可点击；点击时回调
+   * (sourceLine, newChecked)，sourceLine 为原始 markdown 行号（1 起始）。
+   */
+  onToggleTask?: (line: number, checked: boolean) => void
 }
 
 const LANG_BY_EXT: Record<string, string> = {
@@ -48,7 +53,7 @@ function extToLang(file?: string): string | null {
   return LANG_BY_EXT[m[1].toLowerCase()] ?? null
 }
 
-export function MarkdownView({ content, filePath }: Props) {
+export function MarkdownView({ content, filePath, onToggleTask }: Props) {
   const isMarkdown = filePath ? filePath.endsWith('.md') : true
 
   if (isMarkdown) {
@@ -71,6 +76,50 @@ export function MarkdownView({ content, filePath }: Props) {
                 <code className="px-1 py-0.5 rounded bg-zinc-100 text-zinc-800 text-[90%]" {...props}>
                   {children}
                 </code>
+              )
+            },
+            li({ className, children, node, ...props }) {
+              const classes = className ?? ''
+              const isTask = /\btask-list-item\b/.test(classes)
+              if (!isTask || !onToggleTask) {
+                return (
+                  <li className={className} {...props}>
+                    {children}
+                  </li>
+                )
+              }
+              // 定位可点 checkbox：remark 把源行号塞在 node.position
+              const line = node?.position?.start?.line
+              return (
+                <li className={className} {...props}>
+                  {Array.isArray(children)
+                    ? children.map((child, i) => {
+                        // remark-gfm 产出的第一个子元素即 <input type="checkbox" disabled>
+                        if (
+                          typeof child === 'object' &&
+                          child !== null &&
+                          'props' in child &&
+                          (child as { props?: { type?: string } }).props?.type === 'checkbox' &&
+                          typeof line === 'number'
+                        ) {
+                          const c = child as {
+                            props: { checked?: boolean; type?: string }
+                          }
+                          const checked = !!c.props.checked
+                          return (
+                            <input
+                              key={i}
+                              type="checkbox"
+                              checked={checked}
+                              className="cursor-pointer mr-1.5 align-middle"
+                              onChange={() => onToggleTask(line, !checked)}
+                            />
+                          )
+                        }
+                        return child
+                      })
+                    : children}
+                </li>
               )
             },
           }}

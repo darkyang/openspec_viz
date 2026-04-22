@@ -13,6 +13,7 @@
 - **文件树 + Markdown 渲染** —— 边看 change 目录结构边浏览文档,代码块语法高亮
 - **chokidar + SSE 实时刷新** —— 编辑器里改 md,浏览器面板立即跟随
 - **AI 协作可观测** —— 读取本地 Claude Code session 日志,按 change 归因展示 token 消耗、工具调用、耗时与错误数
+- **最小写操作** —— `tasks.md` 中的 checkbox 可直接点击勾选/取消,每个 change 可在 Comments tab 追加评论(落到 `<change>/comments.md`)
 
 ## 快速开始
 
@@ -115,11 +116,31 @@ openspec/changes/<change-name>/
 
 **隐私**：只读、只在本进程内存里聚合；不外发、不落盘、不入库。
 
+## 写操作
+
+openspec-viz v1 主体仍是只读可视化，但开放了两个高频的最小写入：
+
+- **Checkbox 回写** —— 打开 `tasks.md` 后，checkbox 可以直接点击；点击时走 `PATCH /api/changes/:id/tasks`，服务端按行号 + `CHECKBOX_RE` 校验后原地 toggle。文件一改，watcher 推 SSE，浏览器自动刷新，工作流的"代码生成 / 测试验证"节点也会联动重算。
+- **Comments 追加** —— Change Detail 右侧切到 **Comments** tab，每条评论追加到 `<change>/comments.md` 的尾部，格式：
+  ```
+  ---
+
+  **YYYY-MM-DD HH:mm:ss**
+
+  <正文>
+  ```
+  文件不存在会自动创建并写 `# Comments\n\n` 头。纯追加，v1 不提供删除/编辑——历史以 git 为准。
+
+**安全约束**：
+- 行号漂移保护：若点击瞬间服务端读到的目标行已不是 checkbox（比如编辑器在改），返 `409 Conflict`，前端提示"文件已变更，请刷新后重试"，不做静默回写
+- Path 安全：沿用只读接口的 `path.resolve` + `startsWith(changeRoot)` 套路，不可越界
+- 并发：单用户本地工具，不做 mtime-CAS；评论是纯追加天然并发安全
+
 ## 开发
 
 ```bash
 pnpm dev          # server (4567) + vite dev server (5173)
-pnpm test         # parser 单测(Vitest,39 个 case)
+pnpm test         # parser + writer 单测(Vitest,54 个 case)
 pnpm typecheck    # tsc --noEmit
 pnpm build        # 产出 dist/web/ + dist/server/
 ```
@@ -138,6 +159,7 @@ pnpm build        # 产出 dist/web/ + dist/server/
 
 **已实现**:
 - [x] AI 协作可观测(Claude Code session 日志,token 消耗 / 工具调用 / 错误数,按 change 归因)
+- [x] 写操作最小集(checkbox 点击回写、评论追加到 `comments.md`)
 
 **v2(规划中)**:
 - [ ] Capability 视图(按 `specs/<capability>/` 聚合)
@@ -146,7 +168,7 @@ pnpm build        # 产出 dist/web/ + dist/server/
 - [ ] 全局 Sessions 视图(跨 change 的 session 时间线与总览)
 - [ ] 局域网 / Docker 部署(支持非工程师协作者)
 - [ ] 音频播放器(挂 `recordings/`)
-- [ ] 写操作(checkbox 点击回写、评论追加)
+- [ ] 需求维度聚合多 changes(`requirements/<slug>.md` + proposal 里 frontmatter)
 
 ## License
 

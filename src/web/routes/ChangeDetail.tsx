@@ -8,6 +8,7 @@ import { FileTree } from '../components/FileTree'
 import { MarkdownView } from '../components/MarkdownView'
 import { SessionPanel } from '../components/SessionPanel'
 import { CommentsPanel } from '../components/CommentsPanel'
+import { FrontmatterPanel } from '../components/FrontmatterPanel'
 import { ApiError } from '../lib/api'
 import type { FileTreeNode } from '../../shared/types'
 
@@ -71,10 +72,26 @@ export function ChangeDetailRoute() {
 
   return (
     <div>
-      <div className="text-sm text-zinc-500 mb-2">
-        <Link to="/changes" className="hover:text-zinc-900">
-          ← Changes
-        </Link>
+      <div className="text-sm text-zinc-500 mb-2 flex items-center gap-2">
+        {change?.requirementId ? (
+          <>
+            {/* change 属于某需求 → 面包屑指回该需求（主线：change 是需求下的单元） */}
+            <Link
+              to={`/requirements/${change.requirementId}`}
+              className="hover:text-zinc-900"
+            >
+              ← {change.requirementId}
+            </Link>
+            <span className="text-zinc-300">·</span>
+            <Link to="/changes" className="text-zinc-400 hover:text-zinc-700">
+              Changes
+            </Link>
+          </>
+        ) : (
+          <Link to="/changes" className="hover:text-zinc-900">
+            ← Changes
+          </Link>
+        )}
       </div>
 
       <div className="flex items-center gap-3 mb-1">
@@ -92,6 +109,8 @@ export function ChangeDetailRoute() {
 
       {change && (
         <>
+          {change.frontmatter && <FrontmatterPanel frontmatter={change.frontmatter} />}
+
           <div className="rounded-lg border border-zinc-200 bg-white p-5 mb-5">
             <div className="text-xs font-medium text-zinc-500 mb-3">工作流</div>
             <WorkflowGraph nodes={change.workflow} variant="full" />

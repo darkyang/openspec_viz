@@ -25,14 +25,33 @@ describe('parseFrontmatter', () => {
     expect(r.meta).toEqual({ a: '双引号', b: '单引号', c: '无引号' })
   })
 
-  it('嵌套/无效行静默忽略，不抛', () => {
-    const r = parseFrontmatter('---\nrequirement: foo\n  nested: bar\n- item\n---\nbody')
-    expect(r.meta).toEqual({ requirement: 'foo' })
+  it('数组（flow + block）', () => {
+    const r = parseFrontmatter(
+      '---\nflowList: [a, b, c]\nblockList:\n  - x\n  - y\n---\nbody',
+    )
+    expect(r.meta).toEqual({ flowList: ['a', 'b', 'c'], blockList: ['x', 'y'] })
+    expect(r.body).toBe('body')
+  })
+
+  it('嵌套对象', () => {
+    const r = parseFrontmatter('---\ntest_results:\n  TC-1: failed\n  TC-2: passed\n---\nbody')
+    expect(r.meta).toEqual({ test_results: { 'TC-1': 'failed', 'TC-2': 'passed' } })
+  })
+
+  it('数字与布尔', () => {
+    const r = parseFrontmatter('---\ncount: 5\nactive: true\n---\n')
+    expect(r.meta).toEqual({ count: 5, active: true })
+  })
+
+  it('非法 YAML → 退回空 meta（不抛）', () => {
+    // 缩进错乱 + 列表混 dict 同级 → js-yaml 会抛，包内吞掉返回空 meta
+    const r = parseFrontmatter('---\nkey: val\n  nested: bad\n- item\n---\nbody')
+    expect(r.meta).toEqual({})
     expect(r.body).toBe('body')
   })
 
   it('容忍 BOM', () => {
-    const r = parseFrontmatter('\uFEFF---\nrequirement: bom\n---\ntext')
+    const r = parseFrontmatter('﻿---\nrequirement: bom\n---\ntext')
     expect(r.meta.requirement).toBe('bom')
     expect(r.body).toBe('text')
   })
@@ -40,11 +59,10 @@ describe('parseFrontmatter', () => {
   it('CRLF 行结束符兼容', () => {
     const r = parseFrontmatter('---\r\nrequirement: crlf\r\n---\r\ntext\r\n')
     expect(r.meta.requirement).toBe('crlf')
-    // body 是 split(/\r?\n/) 后 join('\n')，所以会丢 \r
     expect(r.body).toBe('text\n')
   })
 
-  it('值里带冒号', () => {
+  it('值里带冒号（合法 YAML：URL 单值）', () => {
     const r = parseFrontmatter('---\nurl: https://example.com/foo\n---\n')
     expect(r.meta.url).toBe('https://example.com/foo')
   })

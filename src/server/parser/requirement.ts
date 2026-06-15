@@ -3,10 +3,14 @@ import path from 'node:path'
 import type {
   ChangeStatus,
   ChangeSummary,
+  RequirementMeta,
   RequirementProgress,
+  RequirementRisk,
+  RequirementStage,
   RequirementSummary,
 } from '../types.js'
 import { UNGROUPED_ID } from '../types.js'
+import { parseFrontmatter } from './frontmatter.js'
 
 /** 状态严重性：取最严（数字大）作为整体 status。archived 最"最完成"。 */
 const STATUS_RANK: Record<ChangeStatus, number> = {
@@ -16,6 +20,14 @@ const STATUS_RANK: Record<ChangeStatus, number> = {
   incomplete: 3,
 }
 const RANK_TO_STATUS: ChangeStatus[] = ['archived', 'done', 'in_progress', 'incomplete']
+
+const VALID_STAGES = new Set<RequirementStage>([
+  'planning',
+  'in-dev',
+  'in-test',
+  'staged',
+  'released',
+])
 
 function emptyProgress(): RequirementProgress {
   return {
@@ -48,11 +60,30 @@ export function aggregateProgress(changes: ChangeSummary[]): RequirementProgress
   return p
 }
 
-/** 读 requirements/<slug>.md，取第一行 `# 标题` 与首段描述。文件缺失返回 null。 */
+/** snake_case key → camelCase RequirementMeta；YAML 数据安全提取。 */
+function extractRequirementMeta(meta: Record<string, unknown>): RequirementMeta {
+  const out: RequirementMeta = {}
+  // target_date：可能被 js-yaml 解析为 Date
+  const td = meta.target_date
+  if (typeof td === 'string' && td.length > 0) out.targetDate = td
+  else if (td instanceof Date && !Number.isNaN(td.getTime())) {
+    out.targetDate = td.toISOString().slice(0, 10)
+  }
+  if (typeof meta.target_version === 'string' && meta.target_version.length > 0) {
+    out.targetVersion = meta.target_version
+  }
+  if (typeof meta.stage === 'string' && VALID_STAGES.has(meta.stage as RequirementStage)) {
+    out.stage = meta.stage as RequirementStage
+  }
+  if (typeof meta.owner === 'string' && meta.owner.length > 0) out.owner = meta.owner
+  return out
+}
+
+/** 读 requirements/<slug>.md，取 frontmatter + 第一行 `# 标题` + 首段描述。文件缺失返回 null。 */
 export function readRequirementMeta(
   openspecRoot: string,
   slug: string
-): { title: string; description: string; body: string } | null {
+): { title: string; description: string; body: string; meta: RequirementMeta } | null {
   const p = path.join(openspecRoot, 'requirements', `${slug}.md`)
   if (!fs.existsSync(p)) return null
   let content: string
@@ -61,16 +92,16 @@ export function readRequirementMeta(
   } catch {
     return null
   }
-  const titleMatch = /^#\s+(.+)$/m.exec(content)
+  const { meta: rawMeta, body: rawBody } = parseFrontmatter(content)
+  const titleMatch = /^#\s+(.+)$/m.exec(rawBody)
   const title = titleMatch ? titleMatch[1].trim() : slug
-  // 描述 = 标题之后首个非空段落（遇到下个 heading 停）
   let description = ''
   if (titleMatch) {
-    const after = content.slice(titleMatch.index + titleMatch[0].length)
+    const after = rawBody.slice(titleMatch.index + titleMatch[0].length)
     const para = /^\n+([^#][^\n]*(?:\n(?!#)[^\n]+)*)/m.exec(after)
     if (para) description = para[1].trim()
   }
-  return { title, description, body: content }
+  return { title, description, body: content, meta: extractRequirementMeta(rawMeta) }
 }
 
 /** 扫 openspec/requirements/*.md 返回所有声明过的 slug（文件名）。 */
@@ -81,6 +112,129 @@ export function listDeclaredRequirements(openspecRoot: string): string[] {
     .readdirSync(dir)
     .filter((f) => f.endsWith('.md') && !f.startsWith('.'))
     .map((f) => f.slice(0, -3))
+}
+
+/**
+ * 推断 effective stage（当 frontmatter.stage 未填时）。规则：
+ * - 全部 archived → 'released'
+ * - 至少一个 in_progress → 'in-dev'
+ * - 全部 done + 任一 testStatus=failed/pending → 'in-test'
+ * - 全部 done + 全部 testStatus=passed（或无 frontmatter）→ 'staged'
+ * - 否则（全部 incomplete / 空）→ 'planning'
+ */
+export function inferStage(changes: ChangeSummary[]): RequirementStage {
+  if (changes.length === 0) return 'planning'
+  const allArchived = changes.every((c) => c.archived)
+  if (allArchived) return 'released'
+  const active = changes.filter((c) => !c.archived)
+  if (active.length === 0) return 'released'
+  if (active.some((c) => c.status === 'in_progress')) return 'in-dev'
+  if (active.some((c) => c.status === 'incomplete')) return 'planning'
+  // active 全部 done
+  const someTestFailedOrPending = active.some((c) => {
+    const ts = c.frontmatter?.testStatus
+    return ts === 'failed' || ts === 'pending'
+  })
+  if (someTestFailedOrPending) return 'in-test'
+  return 'staged'
+}
+
+/**
+ * 为单个 requirement 计算风险信号。规则参见 RequirementRisk['kind']：
+ * - test_failed: 任一 change.frontmatter.testStatus === 'failed'
+ * - unclosed_bug: 任一 change.frontmatter.spawnedBugs[*] 对应的 bug change.lifecycle !== 'shipped'
+ * - burn_down: 距 target_date < 14 天且完成率 < 75% (yellow)；< 7 天且 < 50% (red)
+ * - missing_required: 任一 change.workflow 含 required + missing-required + 非 task-derived 节点
+ */
+export function computeRisks(
+  changes: ChangeSummary[],
+  meta: RequirementMeta | undefined,
+  progress: RequirementProgress,
+  byId: Map<string, ChangeSummary>,
+): RequirementRisk[] {
+  const risks: RequirementRisk[] = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const TASK_DERIVED = new Set(['impl.code', 'impl.test'])
+
+  for (const c of changes) {
+    if (c.archived) continue
+    const fm = c.frontmatter
+
+    // test_failed
+    if (fm?.testStatus === 'failed') {
+      risks.push({
+        kind: 'test_failed',
+        level: 'red',
+        message: `测试失败：${c.id}`,
+        sourceChangeId: c.id,
+      })
+    }
+
+    // unclosed_bug：扫描 spawned_bugs 里有没有 lifecycle != shipped 的
+    if (fm?.spawnedBugs) {
+      for (const bugId of fm.spawnedBugs) {
+        const bug = byId.get(bugId)
+        if (!bug) continue // 找不到（可能已归档），不报
+        const lc = bug.frontmatter?.lifecycle
+        if (lc !== 'shipped' && lc !== 'reverted') {
+          risks.push({
+            kind: 'unclosed_bug',
+            level: 'red',
+            message: `未闭环 bug：${bugId} (${lc ?? 'unknown'})`,
+            sourceChangeId: bugId,
+          })
+        }
+      }
+    }
+
+    // missing_required
+    const missing = c.workflow.find(
+      (n) => n.required && n.state === 'missing-required' && !TASK_DERIVED.has(n.id),
+    )
+    if (missing) {
+      risks.push({
+        kind: 'missing_required',
+        level: 'yellow',
+        message: `${c.id}：缺必需文档 ${missing.id}`,
+        sourceChangeId: c.id,
+      })
+    }
+  }
+
+  // burn_down：requirement 级，需要 target_date
+  if (meta?.targetDate) {
+    const target = new Date(meta.targetDate + 'T00:00:00')
+    if (!Number.isNaN(target.getTime())) {
+      const daysLeft = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      const completion = progress.totalTasks > 0
+        ? progress.doneTasks / progress.totalTasks
+        : (progress.totalNodes > 0 ? progress.doneNodes / progress.totalNodes : 0)
+      const completionPct = Math.round(completion * 100)
+      if (daysLeft <= 7 && completion < 0.5) {
+        risks.push({
+          kind: 'burn_down',
+          level: 'red',
+          message: `${daysLeft} 天到期，完成度 ${completionPct}%`,
+        })
+      } else if (daysLeft <= 14 && completion < 0.75) {
+        risks.push({
+          kind: 'burn_down',
+          level: 'yellow',
+          message: `${daysLeft} 天到期，完成度 ${completionPct}%`,
+        })
+      } else if (daysLeft < 0) {
+        risks.push({
+          kind: 'burn_down',
+          level: 'red',
+          message: `已过期 ${-daysLeft} 天`,
+        })
+      }
+    }
+  }
+
+  return risks
 }
 
 /**
@@ -108,26 +262,35 @@ export function listRequirements(
     if (!buckets.has(slug)) buckets.set(slug, [])
   }
 
+  // 全局 byId 索引（计算 unclosed_bug 时用）
+  const byId = new Map(changes.map((c) => [c.id, c]))
+
   const out: RequirementSummary[] = []
   for (const [id, group] of buckets) {
     const progress = aggregateProgress(group)
     let title = id
     let description: string | undefined
     let body: string | undefined
+    let meta: RequirementMeta | undefined
     if (id === UNGROUPED_ID) {
       title = '未归类 (Ungrouped)'
       description = '没有在 proposal.md 头部声明 requirement 的 change'
     } else {
-      const meta = readRequirementMeta(openspecRoot, id)
-      if (meta) {
-        title = meta.title
-        description = meta.description || undefined
-        if (opts.includeBody) body = meta.body
+      const md = readRequirementMeta(openspecRoot, id)
+      if (md) {
+        title = md.title
+        description = md.description || undefined
+        if (opts.includeBody) body = md.body
+        if (Object.values(md.meta).some((v) => v !== undefined)) meta = md.meta
       } else if (group.length > 0) {
         // 无独立 md：兜底用第一个 change 的 title
         title = group[0].title
       }
     }
+
+    const effectiveStage: RequirementStage = meta?.stage ?? inferStage(group)
+    const risks = computeRisks(group, meta, progress, byId)
+
     out.push({
       id,
       title,
@@ -135,6 +298,9 @@ export function listRequirements(
       body,
       changeIds: group.map((c) => c.id),
       progress,
+      meta,
+      effectiveStage,
+      risks: risks.length > 0 ? risks : undefined,
     })
   }
   // 排序：UNGROUPED 末尾；其他按 id 字母序

@@ -19,9 +19,12 @@ export function Layout() {
             >
               看板
             </NavLink>
-            {/* 次要（非主线）：全量列表 + 活动流 */}
+            {/* 次要（非主线）：全量列表 + 活动流。
+               end：只在列表页 /changes 高亮；进到某个 change（/changes/:id，钻取，无论从需求还是列表进入）
+               不再误点亮 Changes —— change 详情是需求下的钻取单元，导航上下文由面包屑承担。 */}
             <NavLink
               to="/changes"
+              end
               className={({ isActive }) => `${navItem} ${isActive ? navItemActive : ''}`}
             >
               Changes

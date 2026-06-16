@@ -7,6 +7,7 @@ import { createApi } from './api/index.js'
 import { findOpenspecRoot } from './locator.js'
 import { startWatcher } from './watcher.js'
 import { startAiWatcher } from './ai-watcher.js'
+import { listSessionSummaries } from './parser/ai-cache.js'
 import { SseHub } from './sse.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -112,4 +113,18 @@ const MIME: Record<string, string> = {
 const PORT = Number(process.env.PORT) || 4567
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`[openspec-viz] server listening on http://localhost:${info.port}`)
+  // 预热 AI session 缓存：首个 change 详情会触发 attachAiToChange → 一次性解析项目下全部
+  // Claude Code session jsonl（冷启动可达 ~1.5s）。后台异步预热，让首个详情页打开即命中缓存
+  // （ai-cache 按 size+mtime 缓存，watcher 在文件变化时失效，预热结果后续复用）。
+  void (async () => {
+    try {
+      const t0 = Date.now()
+      const sessions = await listSessionSummaries(path.dirname(openspecRoot))
+      if (sessions.length > 0) {
+        console.log(`[openspec-viz] 预热 AI session 缓存：${sessions.length} 个 (${Date.now() - t0}ms)`)
+      }
+    } catch {
+      // 预热失败不影响服务（无 session 目录 / 解析异常都安全忽略，按需时再解析）
+    }
+  })()
 })

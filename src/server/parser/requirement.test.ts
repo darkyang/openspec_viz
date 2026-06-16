@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { aggregateProgress, listRequirements, findRequirement, computeRisks } from './requirement.js'
+import { aggregateProgress, listRequirements, findRequirement, computeRisks, inferStage } from './requirement.js'
 import { UNGROUPED_ID } from '../types.js'
 import type { ChangeSummary, WorkflowNode } from '../types.js'
 
@@ -138,6 +138,67 @@ describe('computeRisks missing_required（轻量级 change 跳过）', () => {
     )
     const risks = computeRisks([c], undefined, aggregateProgress([c]), new Map([[c.id, c]]))
     expect(risks.some((r) => r.kind === 'missing_required')).toBe(false)
+  })
+})
+
+describe('inferStage（released 放宽:不依赖 archive）', () => {
+  function ch(
+    id: string,
+    opts: { status: ChangeSummary['status']; archived?: boolean; lifecycle?: string },
+  ): ChangeSummary {
+    return {
+      id,
+      title: id,
+      status: opts.status,
+      archived: opts.archived ?? false,
+      workflow: [],
+      taskProgress: { total: 0, done: 0 },
+      frontmatter: opts.lifecycle ? { lifecycle: opts.lifecycle } : undefined,
+    }
+  }
+
+  it('全部 lifecycle shipped → released（无需 archive）', () => {
+    expect(
+      inferStage([
+        ch('a', { status: 'done', lifecycle: 'shipped' }),
+        ch('b', { status: 'done', lifecycle: 'shipped' }),
+      ]),
+    ).toBe('released')
+  })
+
+  it('shipped + reverted 混合 → released', () => {
+    expect(
+      inferStage([
+        ch('a', { status: 'done', lifecycle: 'shipped' }),
+        ch('b', { status: 'done', lifecycle: 'reverted' }),
+      ]),
+    ).toBe('released')
+  })
+
+  it('部分 shipped + 部分 drafted(in_progress) → in-dev', () => {
+    expect(
+      inferStage([
+        ch('a', { status: 'done', lifecycle: 'shipped' }),
+        ch('b', { status: 'in_progress', lifecycle: 'drafted' }),
+      ]),
+    ).toBe('in-dev')
+  })
+
+  it('全部 archived → 仍 released', () => {
+    expect(
+      inferStage([
+        ch('a', { status: 'archived', archived: true }),
+        ch('b', { status: 'archived', archived: true }),
+      ]),
+    ).toBe('released')
+  })
+
+  it('全 done 但无 lifecycle（未标交付）→ staged，不算 released', () => {
+    expect(inferStage([ch('a', { status: 'done' }), ch('b', { status: 'done' })])).toBe('staged')
+  })
+
+  it('空列表 → planning', () => {
+    expect(inferStage([])).toBe('planning')
   })
 })
 

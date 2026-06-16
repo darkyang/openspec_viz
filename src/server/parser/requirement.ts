@@ -115,7 +115,7 @@ export function listDeclaredRequirements(openspecRoot: string): string[] {
 
 /**
  * 推断 effective stage（当 frontmatter.stage 未填时）。规则：
- * - 全部 archived → 'released'
+ * - 全部已交付（archived 或 lifecycle shipped/reverted）→ 'released'（不再强制挪 archive/）
  * - 至少一个 in_progress → 'in-dev'
  * - 全部 done + 任一 testStatus=failed/pending → 'in-test'
  * - 全部 done + 全部 testStatus=passed（或无 frontmatter）→ 'staged'
@@ -123,8 +123,11 @@ export function listDeclaredRequirements(openspecRoot: string): string[] {
  */
 export function inferStage(changes: ChangeSummary[]): RequirementStage {
   if (changes.length === 0) return 'planning'
-  const allArchived = changes.every((c) => c.archived)
-  if (allArchived) return 'released'
+  // 已交付 = 归档,或 lifecycle 明确 shipped/reverted。全部已交付即 released ——
+  // 不再要求挪进 archive/（capmind 等不归档的工作流下,全 shipped 的需求也应显示 released）。
+  const isDelivered = (c: ChangeSummary) =>
+    c.archived || c.frontmatter?.lifecycle === 'shipped' || c.frontmatter?.lifecycle === 'reverted'
+  if (changes.every(isDelivered)) return 'released'
   const active = changes.filter((c) => !c.archived)
   if (active.length === 0) return 'released'
   if (active.some((c) => c.status === 'in_progress')) return 'in-dev'

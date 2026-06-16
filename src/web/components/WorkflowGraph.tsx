@@ -1,4 +1,8 @@
-import type { ChangeStatus, Phase, WorkflowNode } from '../../shared/types'
+import type { Phase, WorkflowNode } from '../../shared/types'
+
+// statusBadge 现统一定义在 lib/presentation.ts；此处 re-export 保持既有 import 路径不变
+// （ChangeCard / RequirementCard / RequirementDetail / ChangeDetail 仍从 WorkflowGraph 引用）。
+export { statusBadge } from '../lib/presentation'
 
 interface Props {
   nodes: WorkflowNode[]
@@ -101,12 +105,3 @@ function NodeDot({ node, size }: { node: WorkflowNode; size: 'sm' | 'md' }) {
   )
 }
 
-export function statusBadge(status: ChangeStatus) {
-  const map: Record<ChangeStatus, { label: string; cls: string }> = {
-    incomplete: { label: 'incomplete', cls: 'bg-red-50 text-red-700 border-red-200' },
-    in_progress: { label: 'in progress', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-    done: { label: 'done', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    archived: { label: 'archived', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' },
-  }
-  return map[status]
-}

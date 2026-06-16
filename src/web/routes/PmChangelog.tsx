@@ -4,6 +4,7 @@ import { useFetch } from '../hooks/useFetch'
 import { useLiveEvents } from '../hooks/useLiveEvents'
 import { api } from '../lib/api'
 import type { ChangeSummary } from '../../shared/types'
+import { riskChipCls, effortChipCls, lifecycleChipCls, testStatusChipCls } from '../lib/presentation'
 
 /** PM 变更流水视图：按月聚合的 CHANGELOG-like 表格。父变更 + └─ 缩进的派生 bug。
  *  这是工程视角的「都做了什么」。要看「需求按时上线吗」走 PmRoadmap。 */
@@ -167,11 +168,11 @@ function PmRow({ change, depth }: PmRow) {
         {change.title}
       </Td>
       <Td>{fm?.area && <span className="font-mono text-xs text-zinc-600">{fm.area}</span>}</Td>
-      <Td>{fm?.effort && <Pill label={fm.effort} cls={effortCls(fm.effort)} />}</Td>
-      <Td>{fm?.risk && <Pill label={fm.risk} cls={riskCls(fm.risk)} />}</Td>
-      <Td>{fm?.lifecycle && <Pill label={fm.lifecycle} cls={lifecycleCls(fm.lifecycle)} />}</Td>
+      <Td>{fm?.effort && <Pill label={fm.effort} cls={effortChipCls(fm.effort)} />}</Td>
+      <Td>{fm?.risk && <Pill label={fm.risk} cls={riskChipCls(fm.risk)} />}</Td>
+      <Td>{fm?.lifecycle && <Pill label={fm.lifecycle} cls={lifecycleChipCls(fm.lifecycle)} />}</Td>
       <Td>{fm?.testStatus && fm.testStatus !== 'pending' && (
-        <Pill label={fm.testStatus} cls={testStatusCls(fm.testStatus)} />
+        <Pill label={fm.testStatus} cls={testStatusChipCls(fm.testStatus)} />
       )}</Td>
     </tr>
   )
@@ -189,42 +190,3 @@ function Pill({ label, cls }: { label: string; cls: string }) {
   return <span className={`text-xs px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>
 }
 
-function effortCls(value: string): string {
-  if (value === 'medium') return 'bg-amber-50 border-amber-200 text-amber-800'
-  if (value === 'small') return 'bg-blue-50 border-blue-200 text-blue-700'
-  return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-}
-
-function riskCls(value: string): string {
-  if (value === 'high') return 'bg-red-50 border-red-200 text-red-700'
-  if (value === 'medium') return 'bg-amber-50 border-amber-200 text-amber-800'
-  return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-}
-
-function lifecycleCls(value: string): string {
-  switch (value) {
-    case 'shipped':
-      return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-    case 'in-review':
-      return 'bg-blue-50 border-blue-200 text-blue-700'
-    case 'drafted':
-      return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-    case 'reverted':
-      return 'bg-red-50 border-red-200 text-red-700'
-    case 'blocked':
-      return 'bg-amber-50 border-amber-200 text-amber-800'
-    default:
-      return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-  }
-}
-
-function testStatusCls(value: string): string {
-  switch (value) {
-    case 'failed':
-      return 'bg-red-50 border-red-200 text-red-700'
-    case 'passed':
-      return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-    default:
-      return 'bg-zinc-50 border-zinc-200 text-zinc-500'
-  }
-}

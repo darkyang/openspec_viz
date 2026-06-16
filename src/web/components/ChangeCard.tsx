@@ -1,6 +1,14 @@
 import { Link } from 'react-router-dom'
 import type { ChangeSummary } from '../../shared/types'
-import { WorkflowGraph, statusBadge } from './WorkflowGraph'
+import { WorkflowGraph } from './WorkflowGraph'
+import {
+  statusBadge,
+  typeChipCls,
+  lifecycleChipCls,
+  testStatusDotCls,
+  riskTextCls,
+  effortTextCls,
+} from '../lib/presentation'
 
 export function ChangeCard({ change }: { change: ChangeSummary }) {
   const badge = statusBadge(change.status)
@@ -114,46 +122,3 @@ export function ChangeCard({ change }: { change: ChangeSummary }) {
   )
 }
 
-function typeChipCls(type: string): string {
-  if (type === 'fix') return 'bg-rose-50 border-rose-200 text-rose-700'
-  if (type === 'tweak') return 'bg-violet-50 border-violet-200 text-violet-700'
-  if (type === 'feature') return 'bg-sky-50 border-sky-200 text-sky-700'
-  return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-}
-
-function lifecycleChipCls(value: string): string {
-  switch (value) {
-    case 'in-review':
-      return 'bg-blue-50 border-blue-200 text-blue-700'
-    case 'drafted':
-      return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-    case 'reverted':
-      return 'bg-red-50 border-red-200 text-red-700'
-    case 'blocked':
-      return 'bg-amber-50 border-amber-200 text-amber-800'
-    default:
-      return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-  }
-}
-
-function testStatusDotCls(value: string): string {
-  switch (value) {
-    case 'failed':
-      return 'bg-red-500'
-    case 'passed':
-      return 'bg-emerald-500'
-    default:
-      return 'bg-zinc-300'
-  }
-}
-
-function riskTextCls(value: string): string {
-  if (value === 'high') return 'text-red-600'
-  if (value === 'medium') return 'text-amber-700'
-  return 'text-zinc-500'
-}
-
-function effortTextCls(value: string): string {
-  if (value === 'medium') return 'text-amber-700'
-  return 'text-zinc-500'
-}

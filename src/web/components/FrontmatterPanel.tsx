@@ -1,5 +1,12 @@
 import { Link } from 'react-router-dom'
 import type { ChangeFrontmatter } from '../../shared/types'
+import {
+  lifecycleChipCls,
+  riskChipCls,
+  effortChipCls,
+  fixVerifiedChipCls,
+  typeChipCls,
+} from '../lib/presentation'
 
 /** 轻量级变更 frontmatter 信息面板：元数据 badges + 关系图 + TC 状态。 */
 export function FrontmatterPanel({ frontmatter }: { frontmatter: ChangeFrontmatter }) {
@@ -57,40 +64,21 @@ function Chip({ kind, label }: { kind: ChipKind; label: string }) {
 }
 
 function chipClass(kind: ChipKind, value: string): string {
-  if (kind === 'lifecycle') {
-    switch (value) {
-      case 'shipped':
-        return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-      case 'in-review':
-        return 'bg-blue-50 border-blue-200 text-blue-700'
-      case 'drafted':
-        return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-      case 'reverted':
-        return 'bg-red-50 border-red-200 text-red-700'
-      case 'blocked':
-        return 'bg-amber-50 border-amber-200 text-amber-800'
-    }
+  switch (kind) {
+    case 'lifecycle':
+      return lifecycleChipCls(value)
+    case 'risk':
+      return riskChipCls(value)
+    case 'effort':
+      return effortChipCls(value)
+    case 'fixVerified':
+      return fixVerifiedChipCls(value)
+    case 'type':
+      return typeChipCls(value)
+    case 'area':
+    default:
+      return 'bg-zinc-50 border-zinc-200 text-zinc-600'
   }
-  if (kind === 'risk') {
-    if (value.endsWith('high')) return 'bg-red-50 border-red-200 text-red-700'
-    if (value.endsWith('medium')) return 'bg-amber-50 border-amber-200 text-amber-800'
-    if (value.endsWith('low')) return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-  }
-  if (kind === 'effort') {
-    if (value.endsWith('medium')) return 'bg-amber-50 border-amber-200 text-amber-800'
-    if (value.endsWith('small')) return 'bg-blue-50 border-blue-200 text-blue-700'
-    if (value.endsWith('trivial')) return 'bg-zinc-50 border-zinc-200 text-zinc-600'
-  }
-  if (kind === 'fixVerified') {
-    if (value.endsWith('yes')) return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-    if (value.endsWith('no')) return 'bg-red-50 border-red-200 text-red-700'
-  }
-  if (kind === 'type') {
-    if (value === 'fix') return 'bg-rose-50 border-rose-200 text-rose-700'
-    if (value === 'tweak') return 'bg-violet-50 border-violet-200 text-violet-700'
-    if (value === 'feature') return 'bg-sky-50 border-sky-200 text-sky-700'
-  }
-  return 'bg-zinc-50 border-zinc-200 text-zinc-600'
 }
 
 /* ─── 关系 section ─── */

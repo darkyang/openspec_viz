@@ -3,25 +3,29 @@ import { RequirementsRoute } from './Requirements'
 import { PmRoadmapRoute } from './PmRoadmap'
 import { PmChangelogRoute } from './PmChangelog'
 import { QaDashboardRoute } from './QaDashboard'
+import { BugBoardRoute } from './BugBoard'
 
 /**
  * 需求交付看板（产品主线中心，见根目录 CLAUDE.md）。
  * 以 requirement 为中心，切换 lens 看同一批需求/变更的不同切面——
  * 而不是把 PM / QA / Changelog 做成并排的独立页（那会制造割裂）。
  */
-type Lens = 'roadmap' | 'overview' | 'changelog' | 'qa'
+type Lens = 'roadmap' | 'overview' | 'changelog' | 'qa' | 'bugs'
 
 const LENSES: { id: Lens; label: string; hint: string }[] = [
   { id: 'roadmap', label: '路线图', hint: '需求按 stage 的交付看板（按时上线追踪）' },
   { id: 'overview', label: '概览', hint: '所有需求卡片（含未归类）' },
   { id: 'changelog', label: '变更日志', hint: '按月聚合的变更流水（变更视角）' },
   { id: 'qa', label: 'QA', hint: '测试状态 / 失败 / 派生修复追踪' },
+  { id: 'bugs', label: '问题', hint: '按需求聚合 bug / 失败用例' },
 ]
 
 const DEFAULT_LENS: Lens = 'roadmap'
 
 function isLens(v: string | null): v is Lens {
-  return v === 'roadmap' || v === 'overview' || v === 'changelog' || v === 'qa'
+  return (
+    v === 'roadmap' || v === 'overview' || v === 'changelog' || v === 'qa' || v === 'bugs'
+  )
 }
 
 export function BoardRoute() {
@@ -63,6 +67,7 @@ export function BoardRoute() {
       {lens === 'overview' && <RequirementsRoute embedded />}
       {lens === 'changelog' && <PmChangelogRoute embedded />}
       {lens === 'qa' && <QaDashboardRoute embedded />}
+      {lens === 'bugs' && <BugBoardRoute embedded />}
     </div>
   )
 }

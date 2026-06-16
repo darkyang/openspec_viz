@@ -36,7 +36,17 @@ export function Layout() {
               Timeline
             </NavLink>
           </nav>
-          <div className="ml-auto text-xs text-zinc-400">v0.1.0</div>
+          <div className="ml-auto flex items-center gap-4">
+            {/* /report 脱离 Layout（无内部导航,可发链接对外）→ 用原生 <a> 整页跳转,而非 NavLink */}
+            <a
+              href="/report"
+              className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors"
+              title="对外交付进展报告（可分享链接）"
+            >
+              交付报告 ↗
+            </a>
+            <span className="text-xs text-zinc-400">v0.1.0</span>
+          </div>
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-6 py-6">

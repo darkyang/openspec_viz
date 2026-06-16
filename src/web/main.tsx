@@ -8,11 +8,15 @@ import { TimelineRoute } from './routes/Timeline'
 import { ChangeCardsRoute } from './routes/ChangeCards'
 import { ChangeDetailRoute } from './routes/ChangeDetail'
 import { RequirementDetailRoute } from './routes/RequirementDetail'
+import { ReportRoute } from './routes/Report'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
+        {/* 对外:独立「交付进展」前瞻报告 —— 脱离内部 Layout(无看板/Changes/Timeline 导航),
+            可直接发链接给上层/客户自看。 */}
+        <Route path="/report" element={<ReportRoute />} />
         <Route element={<Layout />}>
           {/* 主线中心：需求交付看板（lens 切换：路线图 / 概览 / 变更日志 / QA） */}
           <Route index element={<BoardRoute />} />

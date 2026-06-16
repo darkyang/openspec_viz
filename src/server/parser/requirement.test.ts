@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { aggregateProgress, listRequirements, findRequirement } from './requirement.js'
+import { aggregateProgress, listRequirements, findRequirement, computeRisks } from './requirement.js'
 import { UNGROUPED_ID } from '../types.js'
 import type { ChangeSummary, WorkflowNode } from '../types.js'
 
@@ -79,6 +79,65 @@ describe('aggregateProgress', () => {
       mkChange('b', { status: 'in_progress', taskDone: 1, taskTotal: 2, nodeDone: 3, nodeTotal: 5 }),
     ])
     expect(p.overallStatus).toBe('in_progress')
+  })
+})
+
+describe('computeRisks missing_required（轻量级 change 跳过）', () => {
+  function changeWith(
+    id: string,
+    workflow: WorkflowNode[],
+    fm?: ChangeSummary['frontmatter'],
+  ): ChangeSummary {
+    return {
+      id,
+      title: `title-${id}`,
+      status: 'in_progress',
+      archived: false,
+      workflow,
+      taskProgress: { total: 0, done: 0 },
+      frontmatter: fm,
+    }
+  }
+  function node(id: string, state: WorkflowNode['state']): WorkflowNode {
+    return { id, phase: 'requirement', label: id, required: true, state }
+  }
+
+  it('完整型 change 缺必需文档 → 报 missing_required', () => {
+    // 有脚手架（design.tech/impl.tasks done），但 req.draft 缺 → 完整型，应报黄风险
+    const c = changeWith('c-complete', [
+      node('req.draft', 'missing-required'),
+      node('design.tech', 'done'),
+      node('impl.tasks', 'done'),
+    ])
+    const risks = computeRisks([c], undefined, aggregateProgress([c]), new Map([[c.id, c]]))
+    expect(risks.some((r) => r.kind === 'missing_required')).toBe(true)
+  })
+
+  it('轻量级 change（无脚手架）缺文档 → 不报 missing_required', () => {
+    // 只有 proposal.md（req.review done），脚手架节点全缺 → 轻量级，不应报"缺必需文档"
+    const c = changeWith('c-lite', [
+      node('req.review', 'done'),
+      node('req.draft', 'missing-required'),
+      node('design.tech', 'missing-required'),
+      node('impl.tasks', 'missing-required'),
+    ])
+    const risks = computeRisks([c], undefined, aggregateProgress([c]), new Map([[c.id, c]]))
+    expect(risks.some((r) => r.kind === 'missing_required')).toBe(false)
+  })
+
+  it('完整型 + 显式 lifecycle → 不报 missing_required（纳入 requirement 的 anchor）', () => {
+    // 有脚手架(design.tech/impl.tasks done)、缺 req.draft，但作者已用 lifecycle 追踪交付 → 豁免
+    const c = changeWith(
+      'c-anchor',
+      [
+        node('req.draft', 'missing-required'),
+        node('design.tech', 'done'),
+        node('impl.tasks', 'done'),
+      ],
+      { lifecycle: 'drafted' },
+    )
+    const risks = computeRisks([c], undefined, aggregateProgress([c]), new Map([[c.id, c]]))
+    expect(risks.some((r) => r.kind === 'missing_required')).toBe(false)
   })
 })
 

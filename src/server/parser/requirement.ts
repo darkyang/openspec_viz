@@ -11,6 +11,8 @@ import type {
 } from '../types.js'
 import { UNGROUPED_ID } from '../types.js'
 import { parseFrontmatter } from './frontmatter.js'
+import { isLightweightChange, TASK_DERIVED_NODES } from './workflow-spec.js'
+import { asString } from '../../shared/codec.js'
 
 /** 状态严重性：取最严（数字大）作为整体 status。archived 最"最完成"。 */
 const STATUS_RANK: Record<ChangeStatus, number> = {
@@ -63,19 +65,16 @@ export function aggregateProgress(changes: ChangeSummary[]): RequirementProgress
 /** snake_case key → camelCase RequirementMeta；YAML 数据安全提取。 */
 function extractRequirementMeta(meta: Record<string, unknown>): RequirementMeta {
   const out: RequirementMeta = {}
-  // target_date：可能被 js-yaml 解析为 Date
-  const td = meta.target_date
-  if (typeof td === 'string' && td.length > 0) out.targetDate = td
-  else if (td instanceof Date && !Number.isNaN(td.getTime())) {
-    out.targetDate = td.toISOString().slice(0, 10)
-  }
-  if (typeof meta.target_version === 'string' && meta.target_version.length > 0) {
-    out.targetVersion = meta.target_version
-  }
+  // target_date 可能被 js-yaml 解析为 Date → asString 统一兜成 YYYY-MM-DD
+  const targetDate = asString(meta.target_date)
+  if (targetDate) out.targetDate = targetDate
+  const targetVersion = asString(meta.target_version)
+  if (targetVersion) out.targetVersion = targetVersion
   if (typeof meta.stage === 'string' && VALID_STAGES.has(meta.stage as RequirementStage)) {
     out.stage = meta.stage as RequirementStage
   }
-  if (typeof meta.owner === 'string' && meta.owner.length > 0) out.owner = meta.owner
+  const owner = asString(meta.owner)
+  if (owner) out.owner = owner
   return out
 }
 
@@ -156,8 +155,6 @@ export function computeRisks(
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const TASK_DERIVED = new Set(['impl.code', 'impl.test'])
-
   for (const c of changes) {
     if (c.archived) continue
     const fm = c.frontmatter
@@ -189,17 +186,23 @@ export function computeRisks(
       }
     }
 
-    // missing_required
-    const missing = c.workflow.find(
-      (n) => n.required && n.state === 'missing-required' && !TASK_DERIVED.has(n.id),
-    )
-    if (missing) {
-      risks.push({
-        kind: 'missing_required',
-        level: 'yellow',
-        message: `${c.id}：缺必需文档 ${missing.id}`,
-        sourceChangeId: c.id,
-      })
+    // missing_required —— 仅对「按文档完整度追踪」的 change 报。两类豁免:
+    // ① 轻量级 change（仅 proposal.md）没有"必需文档"概念;
+    // ② 作者已用 frontmatter lifecycle 显式追踪交付的 change（如纳入 requirement 的完整型 anchor）。
+    // 否则每个 fix-/tweak- 与每个 anchor 都报一条黄风险，把路线图/QA 的风险信号淹没成噪音。
+    const docTracked = !isLightweightChange(c.workflow) && !c.frontmatter?.lifecycle
+    if (docTracked) {
+      const missing = c.workflow.find(
+        (n) => n.required && n.state === 'missing-required' && !TASK_DERIVED_NODES.has(n.id),
+      )
+      if (missing) {
+        risks.push({
+          kind: 'missing_required',
+          level: 'yellow',
+          message: `${c.id}：缺必需文档 ${missing.id}`,
+          sourceChangeId: c.id,
+        })
+      }
     }
   }
 

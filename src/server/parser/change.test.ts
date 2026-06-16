@@ -83,6 +83,60 @@ describe('inferStatus 4 states', () => {
   })
 })
 
+describe('inferStatus 轻量级 change（无脚手架 → frontmatter lifecycle 驱动）', () => {
+  // 真实轻量级形态：只有 proposal.md（req.review done），脚手架/任务节点全 missing-required。
+  function lightweight(): WorkflowNode[] {
+    const ids = [
+      'req.draft', 'req.review', 'design.tech', 'impl.tasks', 'impl.code', 'impl.test',
+      'req.discussion', 'req.changes', 'design.analysis', 'design.ui', 'design.review', 'design.testcases', 'impl.debug',
+    ]
+    const required = new Set(['req.draft', 'req.review', 'design.tech', 'impl.tasks', 'impl.code', 'impl.test'])
+    return ids.map((id) => ({
+      id,
+      phase: 'requirement' as const,
+      label: id,
+      required: required.has(id),
+      state: id === 'req.review' ? 'done' : required.has(id) ? 'missing-required' : 'empty',
+    }))
+  }
+
+  it('shipped / reverted -> done', () => {
+    expect(inferStatus(lightweight(), false, { lifecycle: 'shipped' })).toBe('done')
+    expect(inferStatus(lightweight(), false, { lifecycle: 'reverted' })).toBe('done')
+  })
+
+  it('drafted / in-review / blocked -> in_progress', () => {
+    expect(inferStatus(lightweight(), false, { lifecycle: 'drafted' })).toBe('in_progress')
+    expect(inferStatus(lightweight(), false, { lifecycle: 'in-review' })).toBe('in_progress')
+    expect(inferStatus(lightweight(), false, { lifecycle: 'blocked' })).toBe('in_progress')
+  })
+
+  it('无 lifecycle 也不再 incomplete（默认 in_progress）', () => {
+    expect(inferStatus(lightweight(), false)).toBe('in_progress')
+    expect(inferStatus(lightweight(), false, {})).toBe('in_progress')
+  })
+
+  it('archived 优先于 lifecycle', () => {
+    expect(inferStatus(lightweight(), true, { lifecycle: 'drafted' })).toBe('archived')
+  })
+
+  it('有脚手架 + 显式 lifecycle → 以 lifecycle 为准（纳入 requirement 的 anchor 不因缺 req.draft 判 incomplete）', () => {
+    // 完整型 anchor 形态：design.tech + impl.tasks done、req.draft 缺；作者标了 status
+    const completeish = lightweight().map((n) =>
+      n.id === 'design.tech' || n.id === 'impl.tasks' ? { ...n, state: 'done' as const } : n
+    )
+    expect(inferStatus(completeish, false, { lifecycle: 'shipped' })).toBe('done')
+    expect(inferStatus(completeish, false, { lifecycle: 'drafted' })).toBe('in_progress')
+  })
+
+  it('有脚手架 + 无 lifecycle → 仍按文档完整度（缺 req.draft → incomplete）', () => {
+    const completeish = lightweight().map((n) =>
+      n.id === 'design.tech' || n.id === 'impl.tasks' ? { ...n, state: 'done' as const } : n
+    )
+    expect(inferStatus(completeish, false)).toBe('incomplete')
+  })
+})
+
 describe('findChangeRoot', () => {
   it('finds active change', () => {
     const p = findChangeRoot(FIXTURE, 'add-user-auth')

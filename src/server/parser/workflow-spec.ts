@@ -1,4 +1,4 @@
-import type { Phase } from '../types.js'
+import type { Phase, WorkflowNode } from '../types.js'
 
 export type DetectorKind =
   | 'file-exists'
@@ -129,3 +129,27 @@ export const WORKFLOW_NODES: NodeSpec[] = [
     path: 'tasks.md',
   },
 ]
+
+/**
+ * 由 tasks.md 勾选派生的节点（impl.code / impl.test 不是独立文档，而是 tasks.md 的进度信号）。
+ * 判定 "缺必需文档"（inferStatus / computeRisks 的 missing_required）时排除它们。
+ * 单点定义，change.ts 与 requirement.ts 共用（此前各存一份）。
+ */
+export const TASK_DERIVED_NODES = new Set<string>(['impl.code', 'impl.test'])
+
+/**
+ * "完整型" change 的脚手架节点：存在其一即表明该 change 采用了扩展文档结构
+ * （需求初稿 / 技术方案 / 任务拆分）。三者皆无 = 轻量级 change（fix-* / tweak-*，仅 proposal.md）。
+ */
+export const SCAFFOLDING_NODES = new Set<string>(['req.draft', 'design.tech', 'impl.tasks'])
+
+/**
+ * 轻量级 change 判定：无任何脚手架文档（只有 proposal.md）。
+ *
+ * 这类 change 的 13 节点文档完整度恒为 incomplete、对它失真——其状态应改由 frontmatter
+ * lifecycle 驱动（见 change.ts 的 inferStatus），missing_required 风险也应跳过。
+ * 判据基于节点 state 而非文件名前缀，故对 fix- / tweak- / ble- 等各种命名都稳。
+ */
+export function isLightweightChange(workflow: Pick<WorkflowNode, 'id' | 'state'>[]): boolean {
+  return !workflow.some((n) => SCAFFOLDING_NODES.has(n.id) && n.state === 'done')
+}
